@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Game</title>
+        <meta charset="utf-8">
+        <style>
+            html,body{
+                background-color:black;
+                margin:0px;
+                padding:0px;
+                border:none;
+                width:100vw;
+                height:100vh;
+                display:flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            #screen-wrapper{
+                background-color: white;
+                max-width:100vw;
+                max-height:100vh;
+                position:relative;
+            }
+
+            canvas{
+                width:100%;
+                height:100%;
+                position: absolute;
+                margin:0px;
+                top:0px;
+                left:0px;
+                background-color: rgba(0,0,0,0);
+            }
+        </style>
+        <script src="scripts/socket.io/socket.io.min.js"></script>
+        <script id="Settings & Utility">
+            //Define Screen Settings
+            var CanvasNum = 2;
+            var width = 1100;//1100
+            var height = 900;
+            var minDim = Math.min(width,height);
+            var maxDim = Math.max(width,height);
+            var ScreenDimensions = new DOMRect(0, 0, width, height);
+
+            //Define utility functions
+            function updateMousePos(e = new MouseEvent("unknown")){
+                if(e.type == "unknown") return console.trace(`%c"UpdateMousePos() called with no attached event.`, ErrorStyle);
+                Mouse.x = (e.pageX-ScreenDimensions.x)/ScreenDimensions.width*width;
+                Mouse.y = (e.pageY-ScreenDimensions.y)/ScreenDimensions.height*height;
+            }
+            
+            //Define utitlity values
+            var Mouse = {
+                x:0,
+                y:0,
+                b:0,
+            };
+            var tickHandle = null;
+            var tickCount = 0;
+            var frameHandle = null;
+            var frameCount = 0;
+            const ErrorStyle = "border:1px solid rgba(255,0,0,0.1);padding:0px 5px 0px 5px;color:red;background-color:rgba(255,0,0,0.1);";
+            const WarningStyle = "border:1px solid rgb(255,245,194);padding:0px 5px 0px 5px;background-color:rgb(255,250,230);";
+
+            const socket = io();
+        </script>
+    </head>
+    <body>
+        <div id="screen-wrapper">
+            <canvas></canvas>
+        </div>
+    </body>
+    <script>
+        //Define constant Element Handle for convenience.
+        const ScreenWrapper = document.getElementById("screen-wrapper");
+        //Make sure the number of canvases matches "CanvasNum". (assuming CanvasNum is positive)
+        while(ScreenWrapper.childElementCount < CanvasNum) ScreenWrapper.appendChild(document.createElement("canvas"));
+        //Define Canvas Context
+        const ctx = ScreenWrapper.firstElementChild.getContext('2d');
+        //Create <style> tag for setting screen aspect ratio, and append it to the <head>
+        const RatioStyle = document.createElement("style");
+        document.head.appendChild(RatioStyle);
+        //Sets screen aspect ration by setting styles which automatically resize "#screen-wrapper".
+        function setAspectRatio(w, h){
+            //w & h must be integers greater than zero.
+            w = Math.floor(w);
+            h = Math.floor(h);
+            if(w <= 0  || isNaN(w) || h <= 0 || isNaN(h)) return console.trace("%cBad Aspect Ratio Parameters", ErrorStyle);
+            RatioStyle.textContent = `
+            @media (max-aspect-ratio:${w}/${h}){
+                #screen-wrapper{
+                    width:100vw;
+                    padding-top:calc(${h}/${w}*100vw);
+                }
+            }
+            
+            @media (min-aspect-ratio:${w}/${h}){
+                #screen-wrapper{
+                    height:100vh;
+                    padding-left:calc(${w}/${h}*100vh);
+                }
+            }
+
+            @media (aspect-ratio:${w}/${h}){
+                #screen-wrapper{
+                    width:100vw;
+                    height:100vh;
+                    padding:0px;
+                }
+            }`;
+            //Redefine width and height settings.
+            width = w;
+            height = h;
+            minDim = Math.min(width,height);
+            maxDim = Math.max(width,height);
+            //Make Canvas sizes match aspect ratio
+            //ctx.resetTransform();
+            for(let canvas of ScreenWrapper.children){
+                canvas.width = w;
+                canvas.height = h;
+            }
+            //ctx.translate(width/2, height/2);
+        };
+        setAspectRatio(width, height);
+
+        //Define Core Game functions
+        function Tick(){
+
+            tickCount++;
+        }
+        function Frame(){
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillRect(Mouse.x-10,Mouse.y-10,20,20);
+            frameCount++;
+            frameHandle = window.requestAnimationFrame(Frame);
+        }
+        function StartGame(){
+            StopGame(true);
+            Frame();
+            window.setInterval(Tick, 50);
+            console.log("Game Started");
+        }
+        function StopGame(silent=false){
+            window.cancelAnimationFrame(frameHandle);
+            window.clearTimeout(tickHandle);
+            if (silent) return;
+            console.log("Game Paused...");
+        }
+
+        //Catch Events
+        document.addEventListener("mousemove", updateMousePos);
+        new ResizeObserver(()=>{ScreenDimensions = ScreenWrapper.getBoundingClientRect()}).observe(ScreenWrapper);
+
+        //Define socket events
+        socket
+        .on('connect',()=>{
+            console.log(`Connected with id: "${socket.id.substr(0,4)}..."`);
+            StartGame();
+        })
+        .on('disconnect',()=>{
+            console.log("Disconnected");
+            StopGame();
+        })
+        ;
+
+    </script>
+</html>
